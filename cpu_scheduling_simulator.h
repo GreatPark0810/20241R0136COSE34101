@@ -68,15 +68,11 @@ void push(Queue *q, Process *p) {
 
 Process *pop(Queue *q) {
     if (is_empty(q)) {
-        printf("The queue is empty!\n");
         return NULL;
     }
-    // front는 target 프로세스의 한칸 앞이므로 한칸 이동 후 지운다.
+    // front는 target 프로세스의 한칸 앞이므로 한칸 이동 후 pop한다.
     q->front = (q->front + 1) % MAX_PROCESSES;
-    // target 프로세스 저장하고 있는 칸 깨끗이 비운 후 target을 return한다.
-    Process *target = q->queue[q->front];
-    q->queue[q->front] = NULL;
-    return target;
+    return q->queue[q->front];
 }
 
 ////////////////////////////////////////////////////////////////////////////////

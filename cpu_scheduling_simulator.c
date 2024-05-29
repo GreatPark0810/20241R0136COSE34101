@@ -285,7 +285,11 @@ void schedule_FCFS() {
     memcpy(copied_list, list_of_processes, the_number_of_process * sizeof(Process));
     qsort(copied_list, the_number_of_process, sizeof(Process), arrival_compare);
 
-    // 스케줄링을 기록하기 위한 Record 배열 선언 및 초기화
+    for (int i = 0; i < the_number_of_process; i++) {
+        printf("%d : %d\n", i, copied_list[i].arrival_time);
+    }
+
+    // CPU 스케줄링과 IO 스케줄링을 기록하기 위한 Record 배열 선언 및 초기화
     Record schedule_record[100];
     for (int i = 0; i < 100; i++) {
         schedule_record[i].process = NULL;
@@ -293,46 +297,116 @@ void schedule_FCFS() {
         schedule_record[i].start_time = -1;
     }
 
+    int time = 0;
+    int random_io_start_time = 0; // CPU burst 시작하고 (1 ~ cpu_burst-1) time 사이에서 진행
     int process_idx = 0;
     int record_idx = 0;
-    int time = 0;
-    while (process_idx < the_number_of_process) {
-        // 아직 idx번째 프로세스가 도착하지 않았다면 arrival_time까지 IDLE
-        if (time < copied_list[process_idx].arrival_time) {
-            schedule_record[record_idx].burst_type = IDLE;
-            schedule_record[record_idx].start_time = time;
-            
-            record_idx++;
-            time = copied_list[process_idx].arrival_time;
+    
+    int is_idle = 1;
+    Process *current_processor = NULL;
+
+    // CPU 스케줄링 시작
+    while (process_idx < the_number_of_process || is_empty(&ready_queue)) {
+        // time == arrival_time이면 ready_queue에 프로세스 삽입한다
+        if (process_idx < the_number_of_process && time == copied_list[process_idx].arrival_time) {
+            do { // 중복된 arrival_time으로 인한 버그를 방지하기 위해 do-while 문 사용
+                printf("time : %d / inserted process index : %d\n", time, process_idx);
+                push(&ready_queue, &(copied_list[process_idx]));
+                process_idx++;
+            } while (time == copied_list[process_idx].arrival_time);
         }
-        // 딱 맞춰 도착했다면 프로세스 진행
-        else if (time >= copied_list[process_idx].arrival_time) {
-            schedule_record[record_idx].process = &(copied_list[process_idx]);
+        
+        // ready_queue도 차있는데 idle 상태라면 바로 ready_queue에서 pop해서 실행한다
+        if (is_idle && !is_empty(&ready_queue)) {
+            Process *next = pop(&ready_queue);
+
+            current_processor = next;
+            schedule_record[record_idx].process = next;
             schedule_record[record_idx].burst_type = CPU_BURST;
             schedule_record[record_idx].start_time = time;
-            
-            time += copied_list[process_idx].cpu_burst; // cpu_burst만큼 time 진행
-            process_idx++;
+
+            // (1 ~ cpu_burst-1) 시간 내에서 랜덤한 IO operation이 발생하도록 한다
+            random_io_start_time = (rand() % (next->cpu_burst - 1)) + 1;
+
+            is_idle = 0;
+            record_idx++;
+        } 
+        
+        // 만약 처음 시작에 ready_queue가 비어있다면 처음에는 IDLE로 시작한다
+        if (time == 0 && is_empty(&ready_queue)) {
+            current_processor = NULL;
+
+            schedule_record[record_idx].process = NULL;
+            schedule_record[record_idx].burst_type = IDLE;
+            schedule_record[record_idx].start_time = time;
+
+            is_idle = 1;
             record_idx++;
         }
-        // // 도착했는데 다른 프로세스가 진행중이라면 대기하다가 진행
-        // else {
-        //     schedule_record[record_idx].process = &(copied_list[process_idx]);
-        //     schedule_record[record_idx].burst_type = CPU_BURST;
-        //     schedule_record[record_idx].start_time = time;
 
-        //     time += copied_list[process_idx].cpu_burst; // cpu_burst만큼 time 진행
-        //     process_idx++;
-        //     record_idx++;
-        // }
+        // 현재 프로세서가 CPU에 올라가 있을때만...
+        if (!is_idle) {
+            // 현재 CPU에 있는 프로세스가 모든 burst 완료했다면 (arrival_time + cpu_burst + io_burst)
+            if (time == current_processor->arrival_time + current_processor->cpu_burst + current_processor->io_burst) {
+                // 다음으로 CPU에 들어갈 프로세스 ready_queue에서 pop
+                Process *next = pop(&ready_queue);
+                
+                // 만약 ready_queue가 비어있다면 IDLE 상태로 들어간다
+                if (next == NULL) {
+                    is_idle = 1;
+
+                    current_processor = NULL;
+                    schedule_record[record_idx].process = NULL;
+                    schedule_record[record_idx].burst_type = IDLE;
+                    schedule_record[record_idx].start_time = time;
+                }
+                // ready_queue에서 다음 프로세스를 뽑아오는데 성공했다면 바로 다음 프로세스를 실행한다
+                else {
+                    current_processor = next;
+                    schedule_record[record_idx].process = next;
+                    schedule_record[record_idx].burst_type = CPU_BURST;
+                    schedule_record[record_idx].start_time = time;
+
+                    // (1 ~ cpu_burst-1) 시간 내에서 랜덤한 IO operation이 발생하도록 한다
+                    random_io_start_time = (rand() % (next->cpu_burst - 1)) + 1;
+                }
+
+                record_idx++;
+            }
+            // CPU burst 중 IO operation이 발생하였다면 waiting_queue에 push
+            else if (time == current_processor->arrival_time + random_io_start_time) {
+                schedule_record[record_idx].process = current_processor;
+                schedule_record[record_idx].burst_type = IO_BURST;
+                schedule_record[record_idx].start_time = time;
+
+                push(&waiting_queue, current_processor);
+
+                record_idx++;
+            }
+            // IO operation 발생 후 IO burst가 종료되었다면 waiting_queue에서 pop
+            else if (time == current_processor->arrival_time + random_io_start_time + current_processor->io_burst) {
+                schedule_record[record_idx].process = current_processor;
+                schedule_record[record_idx].burst_type = CPU_BURST;
+                schedule_record[record_idx].start_time = time;
+                
+                pop(&waiting_queue);
+
+                record_idx++;
+            }
+        }
+
+        time++;
     }
 
     for (int i = 0; i < record_idx; i++) {
         if (schedule_record[i].burst_type == CPU_BURST) {
-            printf("PID %d : start time %d\n", (schedule_record[i].process)->pid, schedule_record[i].start_time);
+            printf("CPU_BURST - PID %d : start time %d\n", (schedule_record[i].process)->pid, schedule_record[i].start_time);
+        }
+        else if (schedule_record[i].burst_type == IO_BURST) {
+            printf("IO_BURST - PID %d : start time %d\n", (schedule_record[i].process)->pid, schedule_record[i].start_time);
         }
         else if (schedule_record[i].burst_type == IDLE) {
-            printf("IDLE : start time %d\n", schedule_record[i].start_time);
+            printf("IDLE - start time %d\n", schedule_record[i].start_time);
         }
     }
 }
