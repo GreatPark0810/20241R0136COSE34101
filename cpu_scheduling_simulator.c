@@ -4,7 +4,7 @@ int main() {
     while (1) {
         int select;
 
-        printf("\n************************************************\n");
+        printf("\n****************** Main menu ******************\n\n");
         printf("1. Create processes\n");
         printf("2. Print process info\n");
         printf("3. Process Scheduling\n");
@@ -45,7 +45,7 @@ int main() {
                     break;
                 }
 
-                evaluation_main();
+                evaluation();
                 break;
 
             default:
@@ -155,10 +155,11 @@ void create_process() {
 
     // pid를 제외한 나머지 Process 구조체 멤버에 값 할당
     for (int i = 0; i < the_number_of_process; i++) {
-        list_of_processes[i].arrival_time = (rand() % MAX_ARRIVAL_TIME) + 1;
-        list_of_processes[i].cpu_burst = (rand() % MAX_CPU_BURST) + 1;
-        list_of_processes[i].io_burst = (rand() % MAX_IO_BURST) + 1;
-        list_of_processes[i].priority = (rand() % MAX_PRIORITY) + 1;
+        list_of_processes[i].arrival_time = get_random_int(0, MAX_ARRIVAL_TIME);
+        list_of_processes[i].cpu_burst = get_random_int(5, MAX_CPU_BURST);
+        list_of_processes[i].io_time = get_random_int(1, list_of_processes[i].cpu_burst);
+        list_of_processes[i].io_burst = get_random_int(5, MAX_IO_BURST);
+        list_of_processes[i].priority = get_random_int(1, MAX_PRIORITY);
     }
 
     printf("\nAll processes are generated!\n");
@@ -169,6 +170,7 @@ void remove_process() {
         list_of_processes[i].pid = 0;
         list_of_processes[i].arrival_time = 0;
         list_of_processes[i].cpu_burst = 0;
+        list_of_processes[i].io_time = 0;
         list_of_processes[i].io_burst = 0;
         list_of_processes[i].priority = 0;
     }
@@ -194,11 +196,12 @@ void print_process_info() {
     if (print_type == 0) {
         for (int i = 0; i < the_number_of_process; i++) {
             printf("\nProcess %d\n", i);
-            printf("PID\t\t%d\n", list_of_processes[i].pid);
-            printf("Arrival time\t%d\n", list_of_processes[i].arrival_time);
-            printf("CPU burst\t%d\n", list_of_processes[i].cpu_burst);
-            printf("IO burst\t%d\n", list_of_processes[i].io_burst);
-            printf("Priority\t%d\n\n", list_of_processes[i].priority);
+            printf("PID\t\t\t%d\n", list_of_processes[i].pid);
+            printf("Arrival time\t\t%d\n", list_of_processes[i].arrival_time);
+            printf("CPU burst\t\t%d\n", list_of_processes[i].cpu_burst);
+            printf("IO execution time\t%d\n", list_of_processes[i].io_time);
+            printf("IO burst\t\t%d\n", list_of_processes[i].io_burst);
+            printf("Priority\t\t%d\n\n", list_of_processes[i].priority);
         }
     }
     // 특정한 하나의 프로세스 정보 출력
@@ -214,11 +217,12 @@ void print_process_info() {
         } while (i < 0 || i >= the_number_of_process);
 
         printf("\nProcess %d\n", i);
-        printf("PID\t\t%d\n", list_of_processes[i].pid);
-        printf("Arrival time\t%d\n", list_of_processes[i].arrival_time);
-        printf("CPU burst\t%d\n", list_of_processes[i].cpu_burst);
-        printf("IO burst\t%d\n", list_of_processes[i].io_burst);
-        printf("Priority\t%d\n\n", list_of_processes[i].priority);
+        printf("PID\t\t\t%d\n", list_of_processes[i].pid);
+        printf("Arrival time\t\t%d\n", list_of_processes[i].arrival_time);
+        printf("CPU burst\t\t%d\n", list_of_processes[i].cpu_burst);
+        printf("IO execution time\t%d\n", list_of_processes[i].io_time);
+        printf("IO burst\t\t%d\n", list_of_processes[i].io_burst);
+        printf("Priority\t\t%d\n\n", list_of_processes[i].priority);
     }
 }
 
@@ -275,10 +279,11 @@ void schedule_main() {
     }
 }
 
-void schedule_FCFS() {
+void nonpreemptive_schedule(int condition) {
+    PriorityQueue ready_queue, waiting_queue;
     // ready_queue와 waiting_queue initialize
-    init(&ready_queue);
-    init(&waiting_queue);
+    pq_init(&ready_queue);
+    pq_init(&waiting_queue);
 
     // 프로세스 배열에 list_of_processes 복사 후 arrival_time 기준으로 오름차순 정렬
     Process copied_list[the_number_of_process];
@@ -294,7 +299,6 @@ void schedule_FCFS() {
     }
 
     int time = 0;
-    int random_io_start_time = 0; // CPU burst 시작하고 (1 ~ cpu_burst-1) time 사이에서 진행
     int process_idx = 0;
     int record_idx = 0;
     
@@ -302,34 +306,35 @@ void schedule_FCFS() {
     Process *current_processor = NULL;
 
     // CPU 스케줄링 시작
-    while (process_idx < the_number_of_process || !is_empty(&ready_queue) || current_processor != NULL) {
-        // time == arrival_time이면 ready_queue에 프로세스 삽입한다
-        if (process_idx < the_number_of_process && time == copied_list[process_idx].arrival_time) {
-            do { // 중복된 arrival_time으로 인한 버그를 방지하기 위해 do-while 문 사용
-                // printf("time : %d / inserted process PID : %d\n", time, copied_list[process_idx].pid);
-                push(&ready_queue, &(copied_list[process_idx]));
-                process_idx++;
-            } while (time == copied_list[process_idx].arrival_time);
+    while (1) {
+        // 종료 조건
+        if (process_idx >= the_number_of_process && pq_is_empty(&ready_queue) &&
+            pq_is_empty(&waiting_queue) && current_processor == NULL) {
+            break;
+        }
+
+        // time == arrival_time이면 ready_queue에 프로세스를 삽입한다
+        // 중복된 arrival_time으로 인한 버그를 방지하기 위해 while문 사용
+        while (process_idx < the_number_of_process && time == copied_list[process_idx].arrival_time) {
+            pq_push(&ready_queue, &(copied_list[process_idx]), condition);
+            process_idx++;
         }
 
         // ready_queue도 차있는데 idle 상태라면 바로 ready_queue에서 pop해서 실행한다
-        if (is_idle && !is_empty(&ready_queue)) {
-            Process *next = pop(&ready_queue);
+        if (is_idle && !pq_is_empty(&ready_queue)) {
+            Process *next = pq_pop(&ready_queue, condition);
 
             current_processor = next;
             schedule_record[record_idx].process = next;
             schedule_record[record_idx].burst_type = CPU_BURST;
             schedule_record[record_idx].start_time = time;
 
-            // start_time + (1 ~ cpu_burst-1) 내에서 랜덤한 IO operation이 발생하도록 한다
-            random_io_start_time = schedule_record[record_idx].start_time + (rand() % (next->cpu_burst - 1)) + 1;
-
             is_idle = 0;
             record_idx++;
         }
 
         // 만약 처음 시작에 ready_queue가 비어있다면 처음에는 IDLE로 시작한다
-        if (time == 0 && is_empty(&ready_queue)) {
+        if (time == 0 && pq_is_empty(&ready_queue)) {
             current_processor = NULL;
 
             schedule_record[record_idx].process = NULL;
@@ -340,13 +345,25 @@ void schedule_FCFS() {
             record_idx++;
         }
 
+        // waiting_queue의 처리 (io_burst 소진 및 끝난 프로세스 pop)
+        if (!pq_is_empty(&waiting_queue)) {
+            // 모든 waiting_queue 내의 프로세스의 io_burst 소진
+            for (int i = 0; i < waiting_queue.size; i++) {
+                (waiting_queue.process[i]->io_burst)--;
+            }
+            // 만약 waiting_queue의 맨 앞에 있는 프로세스의 io_burst가 0이 된다면 pop 후 ready_queue로 push
+            if (waiting_queue.process[0]->io_burst == 0) {
+                Process *p = pq_pop(&waiting_queue, WAITING_QUEUE);
+                pq_push(&ready_queue, p, condition);
+            }
+        }
+
         // 현재 프로세서가 CPU에 올라가 있을 때
         if (!is_idle) {
-            // 현재 CPU에 있는 프로세스가 모든 burst 완료했다면 (start_time + cpu_burst + io_burst)
-            if (schedule_record[record_idx-1].burst_type == CPU_BURST
-            && time == schedule_record[record_idx-1].start_time + current_processor->cpu_burst + current_processor->io_burst) {
+            // 현재 CPU에 있는 프로세스가 모든 burst 완료했다면 (cpu_burst와 io_burst 모두 소진)
+            if (current_processor->cpu_burst <= 0 && current_processor->io_burst <= 0) {
                 // 다음으로 CPU에 들어갈 프로세스 ready_queue에서 pop
-                Process *next = pop(&ready_queue);
+                Process *next = pq_pop(&ready_queue, condition);
                 
                 // 만약 ready_queue가 비어있다면 IDLE 상태로 들어간다
                 if (next == NULL) {
@@ -364,60 +381,60 @@ void schedule_FCFS() {
                     schedule_record[record_idx].burst_type = CPU_BURST;
                     schedule_record[record_idx].start_time = time;
 
-                    // start_time + (1 ~ cpu_burst-1) 내에서 랜덤한 IO operation이 발생하도록 한다
-                    random_io_start_time = schedule_record[record_idx].start_time + (rand() % (next->cpu_burst - 1)) + 1;
+                    current_processor->cpu_burst--;
                 }
 
                 record_idx++;
             }
             // CPU burst 중 IO operation이 발생하였다면 waiting_queue에 push
-            else if (schedule_record[record_idx-1].burst_type == CPU_BURST 
-                && time == random_io_start_time) {
-                schedule_record[record_idx].process = current_processor;
-                schedule_record[record_idx].burst_type = IO_BURST;
-                schedule_record[record_idx].start_time = time;
+            // 이미 IO operation 갔다온 프로세스들은 제외
+            else if (time == schedule_record[record_idx-1].start_time + current_processor->io_time &&
+                current_processor->io_burst > 0) {
+                pq_push(&waiting_queue, current_processor, WAITING_QUEUE);
+                // 다음으로 CPU에 들어갈 프로세스 ready_queue에서 pop
+                Process *next = pq_pop(&ready_queue, condition);
 
-                push(&waiting_queue, current_processor);
+                // 만약 ready_queue가 비어있다면 IDLE 상태로 들어간다
+                if (next == NULL) {
+                    current_processor = NULL;
+                    schedule_record[record_idx].process = NULL;
+                    schedule_record[record_idx].burst_type = IDLE;
+                    schedule_record[record_idx].start_time = time;
+
+                    is_idle = 1;
+                }
+                // ready_queue에서 다음 프로세스를 뽑아오는데 성공했다면 바로 다음 프로세스를 실행한다
+                else {
+                    current_processor = next;
+                    schedule_record[record_idx].process = next;
+                    schedule_record[record_idx].burst_type = CPU_BURST;
+                    schedule_record[record_idx].start_time = time;
+
+                    current_processor->cpu_burst--;
+                }
 
                 record_idx++;
             }
-            // IO operation 발생 후 IO burst가 종료되었다면 waiting_queue에서 pop
-            else if (schedule_record[record_idx-1].burst_type == IO_BURST
-                && time == random_io_start_time + current_processor->io_burst) {
-                schedule_record[record_idx].process = current_processor;
-                schedule_record[record_idx].burst_type = CPU_BURST;
-                schedule_record[record_idx].start_time = time;
-                
-                pop(&waiting_queue);
-
-                record_idx++;
+            // 두 경우 모두 아니라면 그냥 cpu_burst 소진
+            else {
+                current_processor->cpu_burst--;
             }
         }
-
         time++;
     }
 
-    for (int i = 0; i <= record_idx; i++) {
-        if (schedule_record[i].burst_type == CPU_BURST) {
-            printf("CPU_BURST - PID %d : start time %d\n", (schedule_record[i].process)->pid, schedule_record[i].start_time);
-        }
-        else if (schedule_record[i].burst_type == IO_BURST) {
-            printf("IO_BURST - PID %d : start time %d\n", (schedule_record[i].process)->pid, schedule_record[i].start_time);
-        }
-        else if (schedule_record[i].burst_type == IDLE) {
-            printf("IDLE - start time %d\n", schedule_record[i].start_time);
-        }
-    }
+    print_gantt_chart(schedule_record, record_idx);
 }
 
-int arrival_compare(const void *p1, const void *p2) {
-    Process *a = (Process *)p1;
-    Process *b = (Process *)p2;
-    return (a->arrival_time > b->arrival_time) ? 1 : 0;
+void schedule_FCFS() {
+    printf("\n******************** FCFS ********************\n");
+    nonpreemptive_schedule(FCFS);
 }
+
 
 void schedule_nonpreemptive_SJF() {
-
+    printf("\n*************** Non-preemptive SJF ***************\n");
+    nonpreemptive_schedule(SJF);
 }
 
 void schedule_preemptive_SJF() {
@@ -425,7 +442,8 @@ void schedule_preemptive_SJF() {
 }
 
 void schedule_nonpreemptive_priority() {
-
+    printf("\n********** Non-preemptive Priority **********\n");
+    nonpreemptive_schedule(PRIORITY);
 }
 
 void schedule_preemptive_priority() {
@@ -436,34 +454,37 @@ void schedule_RR() {
 
 }
 
-void evaluation_main() {
-
+int arrival_compare(const void *p1, const void *p2) {
+    Process *a = (Process *)p1;
+    Process *b = (Process *)p2;
+    return (a->arrival_time > b->arrival_time) ? 1 : 0;
 }
 
-void evaluation_FCFS() {
+void print_gantt_chart(Record *record, int record_size) {
+    printf("\nGantt Chart\n\n");
 
+    printf("+-------+------------+\n");
+    printf("|  Time |   Process  |\n");
+    printf("+-------+------------+\n");
+
+    for (int i = 0; i < record_size; i++) {
+        if (record[i].burst_type == NONE) {
+            continue;
+        }
+
+        printf("| %5d | ", record[i].start_time);
+        
+        if (record[i].burst_type == IDLE) {
+            printf("%10s |\n", "IDLE");
+        } 
+        else {
+            printf("PID %6d |\n", record[i].process->pid);
+        }
+    }
+
+    printf("+-------+------------+\n");
 }
 
-void evaluation_nonpreemptive_SJF() {
-
-}
-
-void evaluation_preemptive_SJF() {
-
-}
-
-void evaluation_nonpreemptive_priority() {
-
-}
-
-void evaluation_preemptive_priority() {
-
-}
-
-void print_gantt_chart() {
-
-}
-
-void evaluation_RR() {
+void evaluation() {
 
 }
