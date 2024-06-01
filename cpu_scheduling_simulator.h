@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define MAX_PROCESSES 10
 #define MAX_ARRIVAL_TIME 50
 #define MAX_CPU_BURST 10
-#define MAX_IO_BURST 10
+#define MAX_IO_BURST 5
 #define MAX_PRIORITY 100
+#define MAX_RECORD 1000
 
 #define FCFS 0
 #define SJF 1
@@ -23,16 +25,18 @@ int get_random_int(int min, int max) {
     return rand() % (max - min + 1) + min;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 
 typedef struct {
     int pid; // 1 ~ RAND_MAX + 1
     int arrival_time; // 0 ~ MAX_ARRIVAL_TIME
     int cpu_burst; // 5 ~ MAX_CPU_BURST
-    int io_burst; // 5 ~ MAX_IO_BURST
-    int io_time; // 1 ~ (cpu_burst-1) (중간에 IO operation이 언제 발생되는지에 대한 time)
+    int io_burst; // 1 ~ MAX_IO_BURST
+    int io_time; // 1 ~ (cpu_burst-1) (CPU burst 중간에 IO operation이 언제 발생되는지에 대한 time)
     int priority; // 1 ~ MAX_PRIORITY (the smaller number, the higher priority)
+    int original_cpu_burst; // cpu_burst는 CPU 위에서 계속 소모되므로 원래 값 미리 저장 
+    int original_io_burst; // io_burst는 IO operation에서 계속 소모되므로 원래 값 미리 저장
+    int waiting_time; // ready_queue 내에서 대기했던 시간 (Average waiting time 계산 시 사용)
 } Process; // 프로세스의 정보를 담는 구조체
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -209,11 +213,16 @@ int pq_is_full(PriorityQueue *pq) {
 
 Process list_of_processes[MAX_PROCESSES]; // create_process()를 통해 생성된 프로세스들 저장
 int the_number_of_process = 0; // 생성된 프로세스의 개수
+int time_quantum = 0; // RR 알고리즘에서 사용되는 time_quantum
+
+Record record[MAX_RECORD];
+int record_size = 0;
 
 /**
  * @brief 
  * 프로세스를 the_number_of_process만큼 create한다.
  * PID는 사용자가 직접 키보드로 입력하고 싶은 경우와, 자동으로 할당되는 경우를 나눈다.
+ * RR 알고리즘에서 사용되는 time_quantum도 정의한다.
  */
 void create_process();
 
@@ -230,20 +239,11 @@ void remove_process();
  */
 void print_process_info();
 
-void config();
-
 /**
  * @brief 
  * 스케줄링을 선택할 수 있는 메뉴를 출력하고, 스케줄링 방법을 선택할 수 있도록 한다.
  */
 void schedule_main();
-
-/**
- * @brief 
- * 비선점형 스케줄링 알고리즘
- * 파라미터를 통해 FCFS, SJF, Priority 스케줄링을 구별한다.
- */
-void nonpreemptive_schedule(int);
 
 /**
  * @brief 
@@ -257,13 +257,40 @@ void schedule_FCFS();
  */
 void schedule_nonpreemptive_SJF();
 
+/**
+ * @brief 
+ * 선점 SJF 스케줄링을 수행하고, 간트 차트를 출력한다.
+ */
 void schedule_preemptive_SJF();
 
+
+/**
+ * @brief 
+ * 비선점 Priority 스케줄링을 수행하고, 간트 차트를 출력한다.
+ */
 void schedule_nonpreemptive_priority();
 
+/**
+ * @brief 
+ * 선점 Priority 스케줄링을 수행하고, 간트 차트를 출력한다.
+ */
 void schedule_preemptive_priority();
 
+/**
+ * @brief 
+ * Round Robin 스케줄링을 수행하고, 간트 차트를 출력한다.
+ */
 void schedule_RR();
+
+/**
+ * @brief 
+ * 스케줄링에서 사용되는 알고리즘
+   @param
+   condition FCFS, SJF, Priority를 구별한다.
+   @param
+   is_preemptive 선점형과 비선점형 스케줄링을 구별한다. SJF와 Priority에서 사용된다. (FCFS는 무조건 비선점) 
+ */
+void schedule(int, int, Record *, int *);
 
 /**
  * @brief 
@@ -274,10 +301,18 @@ int arrival_compare(const void *, const void *);
 
 /**
  * @brief 
+ * 스케줄링 후 waiting_time, cpu_burst, io_burst를 원상복구하여 다른 스케줄링 알고리즘에서 쓰일 수 있도록 한다.
+ */
+void restore_process_value();
+
+/**
+ * @brief 
  * 완성된 스케줄링을 기반으로 간트 차트를 출력한다.
  */
-void print_gantt_chart(Record *, int);
+void print_gantt_chart(Record *, int *);
 
+/**
+ * @brief 
+ * 6개의 스케줄링에서 Average waiting time과 Average turnaround time을 비교한다.
+ */
 void evaluation();
-
-////////////////////////////////////////////////////////////////////////////////
