@@ -7,7 +7,7 @@ int main() {
     while (1) {
         int select;
 
-        printf("\n****************** Main menu ******************\n\n");
+        printf("\n*********************** Main menu ***********************\n\n");
         printf("1. Create processes\n");
         printf("2. Print process info\n");
         printf("3. Process Scheduling\n");
@@ -59,7 +59,7 @@ int main() {
 }
 
 void create_process() {
-    printf("\n********** Create Processes **********\n");
+    printf("\n******************** Create Processes ********************\n\n");
 
     // 만약 프로세스가 이미 생성되어 있는 상황이라면 초기화
     if (the_number_of_process > 0) {
@@ -189,7 +189,7 @@ void remove_process() {
 }
 
 void print_process_info() {
-    printf("\n********** Print the information of each process **********\n");
+    printf("\n*************** Print the information of each process ***************\n\n");
     int print_type;
 
     do {
@@ -239,7 +239,7 @@ void schedule_main() {
     while (1) {
         int select;
 
-        printf("\n********** Processes Scheduling **********\n");
+        printf("\n******************** Processes Scheduling ********************\n\n");
         printf("1. FCFS\n");
         printf("2. Non-preemptive SJF\n");
         printf("3. Preemptive SJF\n");
