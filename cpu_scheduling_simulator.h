@@ -5,7 +5,7 @@
 
 #define MAX_PROCESSES 10
 #define MAX_ARRIVAL_TIME 50
-#define MAX_CPU_BURST 10
+#define MAX_CPU_BURST 20
 #define MAX_IO_BURST 5
 #define MAX_PRIORITY 100
 #define MAX_RECORD 1000

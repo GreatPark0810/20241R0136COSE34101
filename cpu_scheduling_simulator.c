@@ -337,6 +337,9 @@ void schedule_RR(Record *record, int *record_size) {
     printf("\n******************** Round Robin ********************\n");
     schedule(RR, 0, record, record_size);
     print_gantt_chart(record, record_size);
+
+    // time_quantum 제자리로 돌려놓기
+    time_quantum = 0;
 }
 
 void schedule(int condition, int is_preemptive, Record *schedule_record, int *record_size) {
@@ -750,4 +753,7 @@ void evaluation() {
             printf("Round Robin.\n");
             break;
     }
+
+    // time_quantum 제자리로 돌려놓기
+    time_quantum = 0;
 }
