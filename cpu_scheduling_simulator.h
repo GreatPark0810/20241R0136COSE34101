@@ -182,6 +182,14 @@ void heapify_down(PriorityQueue *pq, int idx, int condition) {
     }
 }
 
+void pq_reorder(PriorityQueue *pq, int condition) {
+    // 전체 heap을 heapify_down하여 재정렬을 수행한다
+    for (int i = (pq->size / 2) - 1; i >= 0; i--) {
+        heapify_down(pq, i, condition);
+    }
+}
+
+
 void pq_init(PriorityQueue* pq) {
     pq->size = 0;
     for (int i = 0; i < MAX_PROCESSES; i++) {

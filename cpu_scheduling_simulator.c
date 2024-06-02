@@ -405,6 +405,24 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
         // ready_queue의 처리 (ready_queue 내 대기하는 프로세스들의 waiting_time 증가)
         // time == 0일때 ready queue에 들어온다면 waiting time이 한단위 증가하는 버그가 생기므로 time > 0 조건 추가
         if (!pq_is_empty(&ready_queue) && time > 0) {
+            // Additional Function : Aging in Priority Scheduling
+            for (int i = 0; i < ready_queue.size; i++) {
+                // Priority 스케줄링에서의 Aging 구현하여 starvation 방지
+                // 만약 ready_queue에서 첫번째 순위가 아닌 프로세스가 waiting_time이 5가 넘었다면
+                if (condition == PRIORITY && i > 0 && 
+                    ready_queue.process[i]->waiting_time > 5 &&
+                    ready_queue.process[i]->waiting_time > ready_queue.process[i-1]->waiting_time) {
+                    
+                    // 바로 앞 프로세스와 Priority를 바꾼 후 큐를 재정렬한다.
+                    // (time 단위마다 계속 바뀌는 버그 방지하기 위해 마지막 waiting_time 비교 조건 추가)
+                    int temp = ready_queue.process[i-1]->priority;
+                    ready_queue.process[i-1]->priority = ready_queue.process[i]->priority;
+                    ready_queue.process[i]->priority = temp;
+                    pq_reorder(&ready_queue, PRIORITY);
+                }
+            }
+
+            // Aging 먼저 수행한 후 waiting_time 증가 수행
             for (int i = 0; i < ready_queue.size; i++) {
                 (ready_queue.process[i]->waiting_time)++;
             }
@@ -743,7 +761,7 @@ void evaluation() {
         printf("%-20.2f %-20.2f %-20.2f\n", avg_waiting_time[i], avg_turnaround_time[i], total_time[i]);
     }
 
-    printf("\nTherefore, the most efficient algorithm in those processes is ");
+    printf("\nTherefore, the most efficient algorithm in those processes is the ");
     switch (min_total_time_idx) {
         case 0:
             printf("FCFS.");
