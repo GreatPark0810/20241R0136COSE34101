@@ -325,6 +325,10 @@ void restore_process_value();
 /**
  * @brief 
  * 완성된 스케줄링을 기반으로 간트 차트를 출력한다.
+ * @param
+   schedule_record schedule() 함수에서 채워놓은 기록들의 배열
+   @param
+   record_size 기록 배열의 size
  */
 void print_gantt_chart(Record *, int *);
 
