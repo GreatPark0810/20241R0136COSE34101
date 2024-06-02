@@ -304,7 +304,7 @@ void schedule_nonpreemptive_SJF(Record *record, int *record_size) {
 }
 
 void schedule_preemptive_SJF(Record *record, int *record_size) {
-    printf("\n*************** Non-preemptive SJF ***************\n");
+    printf("\n*************** Preemptive SJF ***************\n");
     schedule(SJF, 1, record, record_size);
     print_gantt_chart(record, record_size);
 }
@@ -316,7 +316,7 @@ void schedule_nonpreemptive_priority(Record *record, int *record_size) {
 }
 
 void schedule_preemptive_priority(Record *record, int *record_size) {
-    printf("\n*************** Non-preemptive SJF ***************\n");
+    printf("\n*************** Preemptive Priority ***************\n");
     schedule(PRIORITY, 1, record, record_size);
     print_gantt_chart(record, record_size);
 }
@@ -551,16 +551,26 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
             // 현재 CPU에 올라와 있는 프로세스가 time_quantum만큼 시간이 지났다면
             else if (condition == RR && !is_preemptive && 
                 time - schedule_record[(*record_size)-1].start_time == time_quantum &&
-                ready_queue.size > 0 && current_processor->cpu_burst > 0) {
-
-                // 즉시 현재 프로세스를 ready_queue로 넘기고 새로운 프로세스를 가져온다.
-                Process *next = pq_pop(&ready_queue, condition);
-                pq_push(&ready_queue, current_processor, condition);
-
-                current_processor = next;
-                schedule_record[*record_size].process = next;
-                schedule_record[*record_size].burst_type = CPU_BURST;
-                schedule_record[*record_size].start_time = time;
+                current_processor->cpu_burst > 0) {
+                
+                // ready_queue에 프로세스가 존재한다면
+                if (ready_queue.size > 0) {
+                    // 즉시 현재 프로세스를 ready_queue로 넘기고 새로운 프로세스를 가져온다.
+                    Process *next = pq_pop(&ready_queue, condition);
+                    pq_push(&ready_queue, current_processor, condition);
+                    current_processor = next;
+                    schedule_record[*record_size].process = next;
+                    schedule_record[*record_size].burst_type = CPU_BURST;
+                    schedule_record[*record_size].start_time = time;
+                }
+                
+                // ready_queue에 프로세스가 존재하지 않아도 그냥 새로운 record를 기록한다. (RR임을 강조)
+                else {
+                    schedule_record[*record_size].process = current_processor;
+                    schedule_record[*record_size].burst_type = CPU_BURST;
+                    schedule_record[*record_size].start_time = time;
+                }
+                
 
                 (*record_size)++;
                 current_processor->cpu_burst--;

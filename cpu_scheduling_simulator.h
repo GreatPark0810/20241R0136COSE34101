@@ -76,8 +76,11 @@ void heapify_up(PriorityQueue *pq, int idx, int condition) {
             is_swap_needed = pq->process[parent_idx]->cpu_burst > pq->process[idx]->cpu_burst;
             break;
 
-        case PRIORITY: // Priority 스케줄링 -> priority 작은 순서 먼저
+        case PRIORITY: // Priority 스케줄링 -> priority 작은 순서 먼저 (priority 같으면 FCFS 기준으로)
             is_swap_needed = pq->process[parent_idx]->priority > pq->process[idx]->priority;
+            if (pq->process[parent_idx]->priority == pq->process[idx]->priority) {
+                is_swap_needed = pq->process[parent_idx]->arrival_time > pq->process[idx]->arrival_time;
+            }
             break;
 
         case RR: // RR 스케줄링 -> FCFS와 동일하게 arrival_time 작은 순서 먼저 (어차피 quantum만큼 실행한다)
@@ -116,6 +119,9 @@ void heapify_down(PriorityQueue *pq, int idx, int condition) {
 
             case PRIORITY:
                 left_cond = pq->process[left]->priority < pq->process[smallest]->priority;
+                if (pq->process[left]->priority == pq->process[smallest]->priority) {
+                    left_cond = pq->process[left]->arrival_time < pq->process[smallest]->arrival_time;
+                }
                 break;
 
             case RR:
@@ -148,6 +154,9 @@ void heapify_down(PriorityQueue *pq, int idx, int condition) {
 
             case PRIORITY:
                 right_cond = pq->process[right]->priority < pq->process[smallest]->priority;
+                if (pq->process[right]->priority == pq->process[smallest]->priority) {
+                    right_cond = pq->process[right]->arrival_time < pq->process[smallest]->arrival_time;
+                }
                 break;
 
             case RR:
