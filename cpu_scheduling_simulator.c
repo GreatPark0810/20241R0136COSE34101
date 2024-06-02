@@ -403,14 +403,15 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
         }
 
         // ready_queue의 처리 (ready_queue 내 대기하는 프로세스들의 waiting_time 증가)
-        if (!pq_is_empty(&ready_queue)) {
+        // time == 0일때 ready queue에 들어온다면 waiting time이 한단위 증가하는 버그가 생기므로 time > 0 조건 추가
+        if (!pq_is_empty(&ready_queue) && time > 0) {
             for (int i = 0; i < ready_queue.size; i++) {
                 (ready_queue.process[i]->waiting_time)++;
             }
         }
 
         // waiting_queue의 처리 (io_burst 소진 및 끝난 프로세스 pop)
-        if (!pq_is_empty(&waiting_queue)) {
+        if (!pq_is_empty(&waiting_queue) && time > 0) {
             // 모든 waiting_queue 내의 프로세스의 io_burst 1씩 소진
             for (int i = 0; i < waiting_queue.size; i++) {
                 (waiting_queue.process[i]->io_burst)--;
