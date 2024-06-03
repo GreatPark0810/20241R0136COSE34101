@@ -21,45 +21,58 @@
 #define CPU_BURST 2
 #define IO_BURST 3
 
+/**
+ * @brief 
+ * min ~ max 사이의 랜덤한 int값을 하나 반환한다.
+ */
 int get_random_int(int min, int max) {
     return rand() % (max - min + 1) + min;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// 프로세스의 정보를 담는 구조체
 typedef struct {
-    int pid; // 1 ~ RAND_MAX + 1
+    int pid; // 1 ~ 10000
     int arrival_time; // 0 ~ MAX_ARRIVAL_TIME
     int cpu_burst; // 5 ~ MAX_CPU_BURST
     int io_burst; // 1 ~ MAX_IO_BURST
-    int io_time; // 1 ~ (cpu_burst-1) (CPU burst 중간에 IO operation이 언제 발생되는지에 대한 time)
+    int io_interrupt; // 1 ~ (cpu_burst-1) (CPU burst 중간에 IO operation이 언제 발생되는지에 대한 time)
     int priority; // 1 ~ MAX_PRIORITY (the smaller number, the higher priority)
     int original_cpu_burst; // cpu_burst는 CPU 위에서 계속 소모되므로 원래 값 미리 저장 
     int original_io_burst; // io_burst는 IO operation에서 계속 소모되므로 원래 값 미리 저장
     int waiting_time; // ready_queue 내에서 대기했던 시간 (Average waiting time 계산 시 사용)
-} Process; // 프로세스의 정보를 담는 구조체
+} Process;
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// 스케줄링에서 각 프로세스가 언제부터 언제까지 burst되었는지 기록하는 구조체
 typedef struct {
-    Process *process;
-    int start_time;
+    Process *process; // 기록에서 가리키는 프로세스
+    int start_time; // 시작 time
     int burst_type; // 0 : None, 1 : CPU, 2 : I/O, 3 : Idle
-} Record; // 스케줄링에서 각 프로세스가 언제부터 언제까지 burst되었는지 기록하는 구조체
+} Record; 
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief 
+ * 프로세스 스케줄링에서 사용되는 우선순위 큐 (Ready queue, Waiting queue) (Heap 자료구조(배열) 사용)
+ */
 typedef struct {
-    Process *process[MAX_PROCESSES]; // 프로세스의 데이터
-    int size;
-} PriorityQueue; // SJF에서 사용되는 우선순위 큐
+    Process *process[MAX_PROCESSES]; // 프로세스의 포인터를 최대 MAX_PROCESSES개만큼 저장
+    int size; // process배열의 실제 사이즈
+} PriorityQueue; 
 
+// 우선순위 큐에서 사용되는 swap (Process의 포인터 값을 swap)
 void swap(Process **a, Process **b) {
     Process *temp = *a;
     *a = *b;
     *b = temp;
 }
 
+// pq->process[idx]에 있는 데이터를 heap 성질을 만족할 때까지 루트노드([0]) 방향으로 이동
+// condition (FCFS, SJF, PRIORITY, RR, WAITING_QUEUE)에 따라 heap 성질 기준 달라짐
 void heapify_up(PriorityQueue *pq, int idx, int condition) {
     if (idx == 0) {
         return;
@@ -101,6 +114,8 @@ void heapify_up(PriorityQueue *pq, int idx, int condition) {
     }
 }
 
+// pq->process[idx]에 있는 데이터를 heap 성질을 만족할 때까지 리프노드 방향으로 이동
+// condition (FCFS, SJF, PRIORITY, RR, WAITING_QUEUE)에 따라 heap 성질 기준 달라짐
 void heapify_down(PriorityQueue *pq, int idx, int condition) {
     int smallest = idx;
     int left = 2*idx + 1;
@@ -109,26 +124,26 @@ void heapify_down(PriorityQueue *pq, int idx, int condition) {
     if (left < pq->size) {
         int left_cond = 0;
         switch (condition) {
-            case FCFS:
+            case FCFS: // FCFS 스케줄링 -> arrival time 작은 순서 먼저
                 left_cond = pq->process[left]->arrival_time < pq->process[smallest]->arrival_time;
                 break;
             
-            case SJF:
+            case SJF: // SJF 스케줄링 -> cpu_burst 작은 순서 먼저
                 left_cond = pq->process[left]->cpu_burst < pq->process[smallest]->cpu_burst;
                 break;
 
-            case PRIORITY:
+            case PRIORITY: // Priority 스케줄링 -> priority 작은 순서 먼저 (priority 같으면 FCFS 기준으로)
                 left_cond = pq->process[left]->priority < pq->process[smallest]->priority;
                 if (pq->process[left]->priority == pq->process[smallest]->priority) {
                     left_cond = pq->process[left]->arrival_time < pq->process[smallest]->arrival_time;
                 }
                 break;
 
-            case RR:
+            case RR: // RR 스케줄링 -> FCFS와 동일하게 arrival_time 작은 순서 먼저 (어차피 quantum만큼 실행한다)
                 left_cond = pq->process[left]->arrival_time < pq->process[smallest]->arrival_time;
                 break;
 
-            case WAITING_QUEUE:
+            case WAITING_QUEUE: // Waiting queue에서는 io_burst가 작은 순서 먼저 (io_burst는 waiting_queue에서 실시간으로 줄어든다)
                 left_cond = pq->process[left]->io_burst < pq->process[smallest]->io_burst;
                 break;
             
@@ -182,14 +197,14 @@ void heapify_down(PriorityQueue *pq, int idx, int condition) {
     }
 }
 
+// 전체 heap의 요소(리프노드 제외)을 heapify_down하여 재정렬을 수행
 void pq_reorder(PriorityQueue *pq, int condition) {
-    // 전체 heap을 heapify_down하여 재정렬을 수행한다
-    for (int i = (pq->size / 2) - 1; i >= 0; i--) {
+    for (int i = (pq->size/2) - 1; i >= 0; i--) {
         heapify_down(pq, i, condition);
     }
 }
 
-
+// PriorityQueue를 초기화
 void pq_init(PriorityQueue* pq) {
     pq->size = 0;
     for (int i = 0; i < MAX_PROCESSES; i++) {
@@ -197,6 +212,7 @@ void pq_init(PriorityQueue* pq) {
     }
 }
 
+// PriorityQueue 마지막 인덱스에 추가 후 heapify_up으로 정렬
 void pq_push(PriorityQueue* pq, Process *p, int condition) {
     if (pq->size == MAX_PROCESSES) {
         return;
@@ -207,6 +223,7 @@ void pq_push(PriorityQueue* pq, Process *p, int condition) {
     (pq->size)++;
 }
 
+// 0번 인덱스의 프로세스를 return 및 heapify_down으로 정렬
 Process *pq_pop(PriorityQueue *pq, int condition) {
     if (pq->size == 0) {
         return NULL;
@@ -227,6 +244,7 @@ int pq_is_full(PriorityQueue *pq) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Global variables
 
 Process list_of_processes[MAX_PROCESSES]; // create_process()를 통해 생성된 프로세스들 저장
 int the_number_of_process = 0; // 생성된 프로세스의 개수
@@ -235,6 +253,7 @@ int time_quantum = 0; // RR 알고리즘에서 사용되는 time_quantum
 Record record[MAX_RECORD];
 int record_size = 0;
 
+////////////////////////////////////////////////////////////////////////////////
 /**
  * @brief 
  * 프로세스를 the_number_of_process만큼 create한다.

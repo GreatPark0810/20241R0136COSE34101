@@ -103,7 +103,7 @@ void create_process() {
         printf("Please input the number of process you want to create. : ");
         scanf("%d", &the_number_of_process);
 
-        // 프로세스의 갯수가 0 이하이거나, 지정해둔 MAXIMUM 값보다 클 때 오류 발생
+        // 프로세스의 갯수가 0 이하이거나, MAX_PROCESSES 값보다 클 때 오류 발생
         if (the_number_of_process > MAX_PROCESSES) {
             printf("Error : The number is not supposed to be more than %d.\n", MAX_PROCESSES);
         }
@@ -160,7 +160,7 @@ void create_process() {
     for (int i = 0; i < the_number_of_process; i++) {
         list_of_processes[i].arrival_time = get_random_int(0, MAX_ARRIVAL_TIME);
         list_of_processes[i].cpu_burst = get_random_int(5, MAX_CPU_BURST);
-        list_of_processes[i].io_time = get_random_int(1, list_of_processes[i].cpu_burst - 1);
+        list_of_processes[i].io_interrupt = get_random_int(1, list_of_processes[i].cpu_burst - 1);
         list_of_processes[i].io_burst = get_random_int(1, MAX_IO_BURST);
         list_of_processes[i].priority = get_random_int(1, MAX_PRIORITY);
         list_of_processes[i].original_cpu_burst = list_of_processes[i].cpu_burst;
@@ -176,7 +176,7 @@ void remove_process() {
         list_of_processes[i].pid = 0;
         list_of_processes[i].arrival_time = 0;
         list_of_processes[i].cpu_burst = 0;
-        list_of_processes[i].io_time = 0;
+        list_of_processes[i].io_interrupt = 0;
         list_of_processes[i].io_burst = 0;
         list_of_processes[i].priority = 0;
         list_of_processes[i].original_cpu_burst = 0;
@@ -208,7 +208,7 @@ void print_process_info() {
             printf("PID\t\t\t%d\n", list_of_processes[i].pid);
             printf("Arrival time\t\t%d\n", list_of_processes[i].arrival_time);
             printf("CPU burst\t\t%d\n", list_of_processes[i].original_cpu_burst);
-            printf("IO execution time\t%d\n", list_of_processes[i].io_time);
+            printf("IO execution time\t%d\n", list_of_processes[i].io_interrupt);
             printf("IO burst\t\t%d\n", list_of_processes[i].original_io_burst);
             printf("Priority\t\t%d\n\n", list_of_processes[i].priority);
         }
@@ -229,7 +229,7 @@ void print_process_info() {
         printf("PID\t\t\t%d\n", list_of_processes[i].pid);
         printf("Arrival time\t\t%d\n", list_of_processes[i].arrival_time);
         printf("CPU burst\t\t%d\n", list_of_processes[i].original_cpu_burst);
-        printf("IO execution time\t%d\n", list_of_processes[i].io_time);
+        printf("IO execution time\t%d\n", list_of_processes[i].io_interrupt);
         printf("IO burst\t\t%d\n", list_of_processes[i].original_io_burst);
         printf("Priority\t\t%d\n\n", list_of_processes[i].priority);
     }
@@ -287,7 +287,6 @@ void schedule_main() {
                 printf("\nYou have entered a wrong number. Please try again.\n");
                 break;
         }
-
     }
 }
 
@@ -322,6 +321,7 @@ void schedule_preemptive_priority(Record *record, int *record_size) {
 }
 
 void schedule_RR(Record *record, int *record_size) {
+    // time_quantum이 설정되어 있지 않으면 설정
     if (time_quantum == 0) {
         printf("Before you start this scheduling algorithm, you need to input a time quantum(2~5).\n");
         do {
@@ -344,7 +344,7 @@ void schedule_RR(Record *record, int *record_size) {
 
 void schedule(int condition, int is_preemptive, Record *schedule_record, int *record_size) {
     PriorityQueue ready_queue, waiting_queue;
-    // ready_queue와 waiting_queue initialize
+    // ready_queue와 waiting_queue 초기화
     pq_init(&ready_queue);
     pq_init(&waiting_queue);
 
@@ -403,7 +403,8 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
         }
 
         // ready_queue의 처리 (ready_queue 내 대기하는 프로세스들의 waiting_time 증가)
-        // time == 0일때 ready queue에 들어온다면 waiting time이 한단위 증가하는 버그가 생기므로 time > 0 조건 추가
+        // time == 0일때 arrival_time이 0인 프로세스가 ready queue에 들어온다면 
+        // 밑의 코드에 의해 waiting time이 한단위 증가하는 버그가 생기므로 time > 0 조건 추가
         if (!pq_is_empty(&ready_queue) && time > 0) {
             // Additional Function : Aging in Priority Scheduling
             for (int i = 0; i < ready_queue.size; i++) {
@@ -418,7 +419,7 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
                     int temp = ready_queue.process[i-1]->priority;
                     ready_queue.process[i-1]->priority = ready_queue.process[i]->priority;
                     ready_queue.process[i]->priority = temp;
-                    pq_reorder(&ready_queue, PRIORITY);
+                    pq_reorder(&ready_queue, condition);
                 }
             }
 
@@ -434,7 +435,7 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
             for (int i = 0; i < waiting_queue.size; i++) {
                 (waiting_queue.process[i]->io_burst)--;
             }
-            // 만약 waiting_queue의 맨 앞에 있는 프로세스의 io_burst가 0이 된다면 pop 후 ready_queue로 push
+            // 만약 waiting_queue의 맨 앞에 있는 프로세스의 io_burst가 전부 소진되었다면 pop 후 ready_queue로 push
             // 중복으로 waiting_queue 내 여러 프로세스의 io_burst가 0이 될 수 있으므로 while문 사용
             while (waiting_queue.process[0]->io_burst == 0 && waiting_queue.size > 0) {
                 Process *p = pq_pop(&waiting_queue, WAITING_QUEUE);
@@ -486,7 +487,7 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
 
         // 현재 프로세서가 CPU에 올라가 있을 때
         if (!is_idle) {
-            // 현재 CPU에 있는 프로세스가 cpu_burst 완료했다면 (cpu_burst 모두 소진)
+            // 현재 CPU에 있는 프로세스가 cpu_burst 완료했다면 (cpu_burst 모두 소진 후 terminate)
             if (current_processor->cpu_burst == 0) {
                 // 다음으로 CPU에 들어갈 프로세스 ready_queue에서 pop
                 Process *next = pq_pop(&ready_queue, condition);
@@ -513,8 +514,8 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
                 (*record_size)++;
             }
             // CPU burst 중 IO operation이 발생하였다면 waiting_queue에 push
-            // 이미 IO operation 갔다온 프로세스들은 제외
-            else if (time == schedule_record[(*record_size)-1].start_time + current_processor->io_time &&
+            // 이미 IO operation 갔다온 프로세스(io_burst == 0)들은 제외
+            else if (time == schedule_record[(*record_size)-1].start_time + current_processor->io_interrupt &&
                 current_processor->io_burst > 0) {
                 pq_push(&waiting_queue, current_processor, WAITING_QUEUE);
                 // 다음으로 CPU에 들어갈 프로세스 ready_queue에서 pop
@@ -553,7 +554,7 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
                 (condition == PRIORITY && ready_queue.size > 0 &&
                 current_processor->priority > ready_queue.process[0]->priority))) {
                 
-                // 즉시 현재 프로세스를 ready_queue로 넘기고 새로운 프로세스를 가져온다.
+                // 즉시 현재 프로세스를 ready_queue로 넘기고 새로운 프로세스를 가져와서 CPU 위에 올린다.
                 Process *next = pq_pop(&ready_queue, condition);
                 pq_push(&ready_queue, current_processor, condition);
 
@@ -566,7 +567,7 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
                 current_processor->cpu_burst--;
             }
             // Round Robin 알고리즘에만 해당
-            // 현재 CPU에 올라와 있는 프로세스가 time_quantum만큼 시간이 지났다면
+            // 현재 CPU에 올라와 있는 프로세스가 time_quantum만큼 시간이 지났고, cpu_burst가 여전히 남았다면
             else if (condition == RR && !is_preemptive && 
                 time - schedule_record[(*record_size)-1].start_time == time_quantum &&
                 current_processor->cpu_burst > 0) {
@@ -581,14 +582,12 @@ void schedule(int condition, int is_preemptive, Record *schedule_record, int *re
                     schedule_record[*record_size].burst_type = CPU_BURST;
                     schedule_record[*record_size].start_time = time;
                 }
-                
                 // ready_queue에 프로세스가 존재하지 않아도 그냥 새로운 record를 기록한다. (RR임을 강조)
                 else {
                     schedule_record[*record_size].process = current_processor;
                     schedule_record[*record_size].burst_type = CPU_BURST;
                     schedule_record[*record_size].start_time = time;
                 }
-                
 
                 (*record_size)++;
                 current_processor->cpu_burst--;
@@ -710,15 +709,14 @@ void evaluation() {
             int arrival_time = list_of_processes[j].arrival_time;
             int completion_time = 0;
 
-            // completion_time 갱신
-            for (int k = 0; k < record_size[i]-1; k++) { 
+            // records[i]를 돌면서 completion_time 갱신
+            for (int k = 0; k < record_size[i]-1; k++) {
                 if (records[i][k].process != NULL && pid == records[i][k].process->pid) {
                     completion_time = records[i][k+1].start_time;
                 }
             }
 
-            int turnaround_time = completion_time - arrival_time;
-            total_turnaround_time += turnaround_time;
+            total_turnaround_time +=  completion_time - arrival_time;;
         }
 
         avg_turnaround_time[i] = (float)total_turnaround_time / the_number_of_process;
@@ -726,7 +724,7 @@ void evaluation() {
 
     // turnaround_time과 waiting_time을 합한 total_time : 알고리즘 평가의 기준
     float total_time[6] = { 0.0f, };
-    // 가장 작은 total_time을 가진 알고리즘이 가장 efficient한 알고리즘이다.
+    // 가장 작은 total_time을 가진 알고리즘을 가장 efficient한 알고리즘으로 선정
     int min_total_time_idx = 0;
 
     for (int i = 0; i < 6; i++) {
